@@ -4,7 +4,7 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.8.0"]
-                 [io.kungfury/coworker "1.1.1"]]
+                 [io.kungfury/coworker "1.1.4"]]
   :main ^:skip-aot coworker.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
