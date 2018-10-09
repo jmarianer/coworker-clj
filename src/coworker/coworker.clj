@@ -20,8 +20,11 @@
   (.. (CoworkerManager. defaultConnManager 1 nil (StaticCoworkerConfigurationInput. (Duration/parse "PT5M") (new java.util.HashMap)))
       (Start)))
 
-(defn runworker [worker & args]
-  (.. WorkInserter INSTANCE (InsertWork defaultConnManager "coworker.Worker" (pr-str [worker args]) "default" (java.time.Instant/now) 100)))
+(defn runworker [& args]
+  (let [[options args] (if (map? (first args)) [(first args) (next args)] [nil args])
+        {strand :strand at :at priority :priority :or
+         {strand "default" at (java.time.Instant/now) priority 100}} options]
+    (.. WorkInserter INSTANCE (InsertWork defaultConnManager "coworker.Worker" (pr-str args) strand at priority))))
 
 (defmacro defworker [name & args]
   `(swap! coworker.Worker/workers assoc ~name (fn ~@args)))

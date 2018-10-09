@@ -8,6 +8,6 @@
 
 (defn -init [_ id stage strand priority] [[id stage strand priority]])
 (defn -Work [this serialized]
-  (let [[worker args] (clojure.edn/read-string serialized)]
+  (let [[worker & args] (clojure.edn/read-string serialized)]
     (apply (get @workers worker) args)
     (.. this (finishWork))))
