@@ -1,35 +1,38 @@
 (ns coworker.core
-  (:gen-class)
-  (:require [coworker.coworker :as cw]))
+  (:import [io.kungfury.coworker.dbs.postgres PgConnectionManager]
+           [io.kungfury.coworker CoworkerManager]
+           [io.kungfury.coworker StaticCoworkerConfigurationInput]
+           [io.kungfury.coworker WorkInserter]
+           [java.time Duration]
+           [kotlin.jvm.functions Function1]))
 
-(cw/defworker :goodbye [] (println "Goodbye"))
+(compile 'coworker.Worker)
 
-(cw/defstatemachine :longcalculation
-  {:init (fn [n] `(:acc ~n 0))
-   :acc (fn [n acc]
-          (println "Adding" n)
-          (Thread/sleep 500)  ; Simulate long calcuation or whatever
-          (if (> n 1)
-            `(:acc ~(- n 1) ~(+ acc n))
-            `(:done ~(+ acc n))))
-   :done (fn [acc]
-           (println "Result is" acc)
-           nil)})
+(def configureConnManager
+  (proxy [Function1] []
+    (invoke [toConfigure]
+      (doto toConfigure
+        (.setJdbcUrl (System/getenv "JDBC_URL"))))))
 
-(defn- client []
-  (cw/runworker {:at (.. (java.time.Instant/now) (plusSeconds 5))} :echo "Yay!")
-  (cw/runworker :longcalculation 10)
+(def defaultConnManager (PgConnectionManager. configureConnManager))
 
-  (cw/runworker :hello)
-  (cw/runworker :echo "Arguments!")
-  (cw/runworker :echo "Many" (+ 5 5) :arguments)
-  (cw/runworker :goodbye)
-  
-  (cw/runworker :echo "Yay should appear in about five seconds")
-  )
+(defn server []
+  (.. (CoworkerManager. defaultConnManager 1 nil (StaticCoworkerConfigurationInput. (Duration/parse "PT5M") (new java.util.HashMap)))
+      (Start)))
 
-(defn -main
-  [cmd & args]
-  (case cmd
-    "server" (cw/server)
-    "client" (client)))
+(defn runworker [& args]
+  (let [[options args] (if (map? (first args)) [(first args) (next args)] [nil args])
+        {strand :strand at :at priority :priority :or
+         {strand "default" at (java.time.Instant/now) priority 100}} options
+        [name args] [(first args) (next args)]]
+    (.. WorkInserter INSTANCE (InsertWork defaultConnManager "coworker.Worker" (pr-str (cons name (cons :init args))) strand at priority))))
+
+(defmacro defstatemachine [name stages]
+  `(swap! coworker.Worker/workers assoc ~name ~stages))
+
+(defmacro defworker [name params & body]
+  `(defstatemachine ~name
+    {:init (fn ~params ~@body nil)}))
+
+(defworker :hello [] (println "Hello, Clojure"))
+(defworker :echo [& args] (apply println args))
